@@ -1,0 +1,390 @@
+---
+title: "Data Transformation"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::html_clean:
+    highlight: kate
+---
+
+
+```{r knitr_init, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+```{r}
+#import neccessary libraries
+
+library("tidyr")
+library("stringr")
+library("dplyr")
+library("ggplot2")
+
+```
+
+# Introduction
+
+The goal of this assignment is to practice in preparing different datasets for downstream analysis work by using three "Wide" datasets. The data transformation and analysis tasks that are required for this assignment are;
+
+- Creation of a .CSV file which includes all the information of the wide dataset. 
+
+- Read the information from the .CSV file into R, use tidyr and dplyr as needed to tidy and transform the data.
+
+- Perform the analysis.
+
+# Child Mortality
+
+The first wide dataset we will transform and analyze is "Child Mortality, Estimates for under-five, infant and neonatral mortality" for each country based on the research of United Nations Inter-agency Group for Child Mortality Estimation. The dataset can be found at [https://childmortality.org/](https://childmortality.org/). The insight that we want to get from this data analysis is to see the death count on children that are under 5, infant and neonatal in the United States between 1950 and 2015. 
+
+## Data Collection
+
+
+```{r}
+# read .csv into R
+
+child_mortality <- read.csv("https://raw.githubusercontent.com/anilak1978/medium-article-data/master/RatesDeaths_AllIndicators.csv", skip = 6)
+head(child_mortality, n=5)
+
+```
+
+## Data Transformation and Cleaning
+
+We can see that the data set is wide and messy, column headers are values and not variable names, column names have multiple values stored in them (example: U5MR.1950). We can use gather make the dataset long. 
+
+```{r}
+# use gather to create a column for year variable and use columns from U5MR.1950 to Neonatal.Deaths.2015 to be the row values of the new column year.
+child_mortality <- child_mortality %>%
+  gather(year, count, U5MR.1950:Neonatal.Deaths.2015)
+
+head(child_mortality, n=5)
+tail(child_mortality, n=5)
+
+```
+
+We can see that multiple values are stored in year column. We can separate the year column values and assign them to two columns. 
+
+```{r}
+# Multiple values are stored in year column. Separate them to two columns; type and year.
+
+child_mortality$year <- str_replace(child_mortality$year, "\\.1", "-1")
+child_mortality$year <- str_replace(child_mortality$year, "\\.2", "-2")
+child_mortality <- child_mortality %>%
+  separate(year, c("type", "year"), sep = "-")
+child_mortality$type <- str_replace(child_mortality$type, "\\.", " ")
+
+head(child_mortality)
+tail(child_mortality)
+
+```
+
+We can change the name of the columns , look at missing values and change the data type of each column as part of the data transformation and cleaning.
+
+```{r}
+# rename the columns as part of cleaning
+
+colnames(child_mortality) <- c("Code", "Country_Name", "Uncertainity", "Type", "Year", "Count")
+head(child_mortality)
+
+
+```
+
+```{r}
+# find missing values in each column
+sum(is.na(child_mortality$Code))
+sum(is.na(child_mortality$Country_Name))
+sum(is.na(child_mortality$Type))
+sum(is.na(child_mortality$Year))
+sum(is.na(child_mortality$Count))
+
+```
+
+```{r}
+
+str(child_mortality)
+
+```
+
+```{r}
+# we need to change the type of certain variables
+
+child_mortality$Code <- as.character(child_mortality$Code)
+child_mortality$Country_Name <- as.character(child_mortality$Country_Name)
+child_mortality$Year <- as.numeric(child_mortality$Year)
+child_mortality$Count <- as.numeric(child_mortality$Count)
+child_mortality$Type <- as.factor(child_mortality$Type)
+str(child_mortality)
+
+```
+
+## Data Exploration and Analysis.
+
+Main goal of the analysis is to look at the deaths occured in the United States for under five, infant and neonatal death types. We can filter and create a new data frame to help with our analysis.
+
+
+```{r}
+# first get the names of each category Type
+levels(child_mortality$Type)
+
+```
+
+
+```{r}
+# filter through based on the conditions for our main goal of analysis.
+
+child_mortality_us <- child_mortality %>%
+  filter(Country_Name=="United States of America", Type == "Neonatal Deaths" | Type=="Infant Deaths" | Type == "Under five.Deaths" )
+
+head(child_mortality_us, n=10)
+tail(child_mortality_us, n=10)
+
+
+```
+
+We can look at the distribution of Type within our filtered data set. 
+
+```{r}
+library('ggplot2')
+g <- ggplot(child_mortality_us, aes(Type))
+g + geom_bar(aes(fill=Uncertainity), width = 0.5) + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Type Distribution for Children Mortality") 
+```
+
+The overall the Type and Uncertainity variable are evenly distributed. We can also look at the change of death counts based on the year variable.  
+
+```{r}
+
+ggplot(child_mortality_us, aes(x=Year)) + 
+  geom_line(aes(y=Count)) + 
+  labs(title="Children Mortality Time Series")
+
+```
+
+
+We can see that the death counts for children under 5, infant and neonatal deaths significantly went down compare to the 1950's.
+
+### Conclusion
+
+Based on our analysis, we can confirm that the death counts for children under 5, infant and neonatal deaths went down significantly during the timeframe between 1950 and 2015. We can further look into research and insights, make further analysis to determine to possible causes and define if there are any correlation with different possible data sets and variables.
+
+
+# Hospital Separation and Patient Days
+
+In this data set , we have a semi wide and messy data around patients and hospitals and counts between 1993 and 1998. The dataset can be downloaded from [here](https://raw.githubusercontent.com/anilak1978/medium-article-data/master/hospital_patients.csv). The main purpose of the anlaysis is to see the trend of patient days and separations for Mental Disorders between the years of 1993 and 1998.
+
+## Data Collection
+
+```{r}
+
+patients <- read.csv("https://raw.githubusercontent.com/anilak1978/medium-article-data/master/hospital_patients.csv")
+head(patients)
+tail(patients)
+
+```
+
+## Data Transformation and Cleaning
+
+We can see that the column headers are values and not variable names. So we can use gather for tidying the dataset. We can also remove the FY from the year column and remove "," from count column and make those columns numeric to further help with our analyis. 
+
+
+```{r}
+patients <- patients %>%
+  gather(year, count, FY1993:FY1998) %>%
+  mutate(year=as.numeric(gsub("FY", "", year))) %>%
+  mutate(count=as.numeric(gsub(",", "", count)))
+
+head(patients)
+
+```
+
+We can rename the column names , update the Chapter column values by removing the unneccessary numbering. 
+
+```{r}
+patients$IcdChapter <- str_replace(patients$IcdChapter, "[:digit:]\\.", "")
+head(patients)
+```
+
+```{r}
+colnames(patients) <- c("Reason", "Field", "Year", "Count")
+patients$Count <- as.numeric(patients$Count)
+head(patients)
+```
+
+Let's look to see if there are any missing values.
+
+```{r}
+sum(is.na(patients$Reason))
+sum(is.na(patients$Field))
+sum(is.na(patients$Year))
+sum(is.na(patients$Count))
+
+
+```
+
+There are no missing values, the data set is ready for data analysis and exploration.
+
+## Data Exploration and Analysis
+
+Main goal of the analysis is to extract insights for patients that have mental disorders with Patient Days. We can further filter our analysis based on this condition.
+
+```{r}
+
+mental_disorders <- filter(patients, Reason == " Mental Disorders", Field=="PatientDays")
+head(mental_disorders)
+
+
+```
+
+We can further look to see the trend based on the year.
+
+```{r}
+
+ggplot(mental_disorders, aes(x=Year)) + 
+  geom_line(aes(y=Count)) + 
+  labs(title="Mental Disorders Time Series for Patient Days")
+
+```
+
+```{r}
+
+mental_disorders_2 <- filter(patients, Reason == " Mental Disorders", Field=="Separations")
+head(mental_disorders_2)
+
+```
+
+```{r}
+ggplot(mental_disorders_2, aes(x=Year)) + 
+  geom_line(aes(y=Count)) + 
+  labs(title="Mental Disorders Time Series for Separations")
+
+```
+
+## Conclusion
+
+Based on our analysis, we can state that the patients that were in the Mental Disorder Category, Patient Days in the hospital and Separations increased significantly starting between 1997 and 1998. We can further extend our analysis on the reasoning of this insight.
+
+
+# Great British Bakeoff 
+
+At our last analysis, we will take a look at a data set
+
+## Data Collection
+
+```{r}
+
+baker <- read.csv('https://raw.githubusercontent.com/anilak1978/medium-article-data/master/baker_results.csv')
+head(baker)
+
+```
+
+## Data Transformation and Cleaning
+
+When we look at our data set, we can see that it is wide and messy. There are way too many columns that we will not need for the purpose of our analysis. We can start by subsetting the raw data set to get the columns we need.
+
+```{r}
+
+baker_results <- select(baker, baker_full, age, occupation, hometown, technical_median, first_date_appeared, percent_episodes_appeared)
+head(baker_results)
+
+
+
+```
+
+Let's also update the column names.
+
+```{r}
+
+colnames(baker_results) <- c("Contestant", "Age", "Occupation", "HomeTown", "Rate", "Date", "Rating")
+head(baker_results)
+
+```
+
+We can split the Date variable into year, month and day which will allow us to look at more specific time series analysis. 
+
+```{r}
+
+baker_results <- separate(baker_results, Date, c("Year", "Month", "Day"), sep = "-")
+head(baker_results)
+
+```
+
+We can filter to a particular month to see if the rating of the show depends based on the month.
+
+
+```{r}
+baker_results$Month <- as.integer(baker_results$Month)
+baker_results$Year <- as.integer(baker_results$Year)
+baker_results$Day <- as.integer(baker_results$Day)
+str(baker_results)
+
+```
+
+```{r}
+sum(is.na(baker_results$Age))
+sum(is.na(baker_results$Contestant))
+sum(is.na(baker_results$Occupation))
+sum(is.na(baker_results$HomeTown))
+sum(is.na(baker_results$Rate))
+sum(is.na(baker_results$Year))
+sum(is.na(baker_results$Month))
+sum(is.na(baker_results$Day))
+sum(is.na(baker_results$Rating))
+
+```
+There is one missing value in Rate. We can remove that data set from our analysis. 
+
+```{r}
+
+baker_results <- na.omit(baker_results)
+sum(is.na(baker_results$Rate))
+
+```
+
+
+
+```{r}
+
+ggplot(baker_results)+
+  geom_point(aes(Rate, Rating))
+
+```
+
+## Conclusion
+
+There is no linear correlation between Rate and Rating. This means, the ratings of the show does not depend on how good the Contestant is.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
